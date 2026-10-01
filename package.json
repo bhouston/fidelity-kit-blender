@@ -8,8 +8,9 @@
     "url": "git+https://github.com/bhouston/fidelity-kit-blender.git"
   },
   "files": [
-    "dist",
-    "blender",
+    "dist/*.js",
+    "dist/*.d.ts",
+    "blender/*.py",
     "README.md",
     "LICENSE",
     "THIRD_PARTY_LICENSES.txt"

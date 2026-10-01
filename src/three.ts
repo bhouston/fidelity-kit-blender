@@ -195,9 +195,10 @@ export function exportScene(
         const m = material as Material & {
           isMeshStandardMaterial?: boolean;
           isMeshBasicMaterial?: boolean;
+          isNodeMaterial?: boolean;
           toneMapped: boolean;
         };
-        if (!m.isMeshStandardMaterial && !m.isMeshBasicMaterial)
+        if (m.isNodeMaterial || (!m.isMeshStandardMaterial && !m.isMeshBasicMaterial))
           diagnostic(
             `Unsupported material ${m.type}; supply a MeshStandardMaterial/MeshPhysicalMaterial or MeshBasicMaterial replacement`,
           );
