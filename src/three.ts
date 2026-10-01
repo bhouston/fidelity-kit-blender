@@ -33,7 +33,7 @@ import type {
   DataTexture,
 } from "three";
 import { GLTFExporter } from "three/addons/exporters/GLTFExporter.js";
-import { EXRExporter, ZIPS_COMPRESSION } from "three/addons/exporters/EXRExporter.js";
+import { EXRExporter, NO_COMPRESSION } from "three/addons/exporters/EXRExporter.js";
 import { clone } from "three/addons/utils/SkeletonUtils.js";
 import { renderGLTF } from "./index.js";
 import type {
@@ -156,7 +156,8 @@ export async function exportEnvironment(texture: DataTexture): Promise<Uint8Arra
   }
   const copy = texture.clone();
   copy.image = { data: rows, width, height };
-  return new EXRExporter().parse(copy, { type: FloatType, compression: ZIPS_COMPRESSION });
+  // Three.js ZIP export can corrupt partial blocks or tiny rows; use lossless uncompressed EXR.
+  return new EXRExporter().parse(copy, { type: FloatType, compression: NO_COMPRESSION });
 }
 class NodeFileReader {
   result: ArrayBuffer | string | null = null;
