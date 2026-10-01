@@ -1,0 +1,61 @@
+{
+  "name": "fidelity-kit-blender",
+  "version": "0.1.0",
+  "description": "Render Three.js scenes and glTF assets with Blender Cycles",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bhouston/fidelity-kit-blender.git"
+  },
+  "files": [
+    "dist/*.js",
+    "dist/*.d.ts",
+    "blender/*.py",
+    "README.md",
+    "LICENSE",
+    "THIRD_PARTY_LICENSES.txt"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./three": {
+      "types": "./dist/three.d.ts",
+      "import": "./dist/three.js"
+    },
+    "./runtime": {
+      "types": "./dist/runtime.d.ts",
+      "import": "./dist/runtime.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "tsc": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "oxlint src",
+    "format": "oxfmt .",
+    "prepack": "npm run build"
+  },
+  "dependencies": {
+    "@napi-rs/canvas": "^0.1.80"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "@types/three": "^0.186.0",
+    "@vitest/coverage-v8": "^4.1.10",
+    "oxfmt": "^0.58.0",
+    "oxlint": "^1.73.0",
+    "three": "^0.186.0",
+    "typescript": "^7",
+    "vitest": "^4.1.10"
+  },
+  "peerDependencies": {
+    "three": ">=0.180.0 <0.200.0"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "packageManager": "pnpm@11.0.8"
+}
