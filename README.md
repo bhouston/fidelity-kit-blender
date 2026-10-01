@@ -51,6 +51,8 @@ Rendering defaults: 256 samples, 8 bounces, seed 1, adaptive threshold 0.01, den
 
 ## Runtime utilities
 
+Blender subprocesses run just below normal CPU scheduling priority (nice `+1` on macOS/Linux, Below Normal on Windows). An already lower inherited priority is preserved. If the OS rejects the adjustment, the renderer warns and continues. This does not change the calling application's priority or GPU scheduling.
+
 ```ts
 import { discoverBlender, runBlender } from "fidelity-kit-blender/runtime";
 const runtime = await discoverBlender({ executable: "/path/to/Blender" });

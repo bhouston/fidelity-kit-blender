@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { readdir } from "node:fs/promises";
 import path from "node:path";
+import { constants, getPriority, setPriority } from "node:os";
 
 export interface RunOptions {
   signal?: AbortSignal;
@@ -18,6 +19,22 @@ export function runBlender(
     const child = spawn(executable, args, {
       detached: process.platform !== "win32",
       stdio: ["ignore", "pipe", "pipe"],
+    });
+    child.once("spawn", () => {
+      try {
+        // Yield to normal-priority work without raising an already lower inherited priority.
+        const priority =
+          process.platform === "win32" ? constants.priority.PRIORITY_BELOW_NORMAL : 1;
+        if (getPriority(child.pid!) < priority) setPriority(child.pid!, priority);
+      } catch (error) {
+        // A short-lived child may have exited before we can adjust its priority.
+        if (
+          (error as NodeJS.ErrnoException & { info?: { code?: string } }).info?.code !== "ESRCH" &&
+          (error as NodeJS.ErrnoException).code !== "ESRCH"
+        ) {
+          console.warn("Unable to lower Blender CPU priority:", error);
+        }
+      }
     });
     let output = "";
     let failure: Error | undefined;
