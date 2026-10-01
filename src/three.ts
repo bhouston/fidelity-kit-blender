@@ -1,6 +1,7 @@
 import { Canvas, createCanvas, Image, ImageData } from "@napi-rs/canvas";
 import {
   Euler,
+  DataTexture,
   Object3D,
   HalfFloatType,
   FloatType,
@@ -30,7 +31,6 @@ import type {
   Mesh,
   Material,
   Texture,
-  DataTexture,
 } from "three";
 import { GLTFExporter } from "three/addons/exporters/GLTFExporter.js";
 import { EXRExporter, NO_COMPRESSION } from "three/addons/exporters/EXRExporter.js";
@@ -154,8 +154,8 @@ export async function exportEnvironment(texture: DataTexture): Promise<Uint8Arra
     for (let y = 0; y < height; y++)
       rows.set(data.subarray(y * stride, (y + 1) * stride), (height - 1 - y) * stride);
   }
-  const copy = texture.clone();
-  copy.image = { data: rows, width, height };
+  // Texture.clone shares its Source; allocate a fresh texture to preserve the caller image.
+  const copy = new DataTexture(rows, width, height, RGBAFormat, texture.type);
   // Three.js ZIP export can corrupt partial blocks or tiny rows; use lossless uncompressed EXR.
   return new EXRExporter().parse(copy, { type: FloatType, compression: NO_COMPRESSION });
 }

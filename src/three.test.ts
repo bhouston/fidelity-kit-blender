@@ -72,7 +72,11 @@ it("extracts zoomed cameras without changing their projection or parent", () => 
 });
 it("exports readable HDR data and rejects unsupported environment data", async () => {
   const texture = new DataTexture(new Float32Array([1, 0.5, 0.2, 1]), 1, 1, RGBAFormat, FloatType);
+  const sourceImage = texture.image;
+  const sourcePixels = texture.image.data;
   const bytes = await exportEnvironment(texture);
+  expect(texture.image).toBe(sourceImage);
+  expect(texture.image.data).toBe(sourcePixels);
   expect(new DataView(bytes.buffer).getUint32(0, true)).toBe(20000630);
   const decoded = new EXRLoader().setDataType(FloatType).parse(bytes.buffer);
   expect(decoded.data[0]).toBeCloseTo(1);
