@@ -2,6 +2,7 @@ import { Canvas, createCanvas, Image, ImageData } from "@napi-rs/canvas";
 import {
   Euler,
   DataTexture,
+  Source,
   Object3D,
   HalfFloatType,
   FloatType,
@@ -176,6 +177,18 @@ class NodeFileReader {
   }
 }
 let exportQueue: Promise<unknown> = Promise.resolve();
+function createExportCanvas(width: number, height: number) {
+  const canvas = createCanvas(width, height);
+  // GLTFExporter identifies raw pixel images by image.data. Native canvas's
+  // data() method must not be mistaken for a DataTexture pixel array.
+  Object.defineProperty(canvas, "data", { value: undefined, configurable: true });
+  const toBlob = canvas.toBlob.bind(canvas);
+  // The native encoder can outlive GLTFExporter's reference to its canvas.
+  // Retain it in the callback until encoding finishes to prevent a native crash.
+  canvas.toBlob = (callback, mime, quality) =>
+    toBlob((blob) => callback.call(canvas, blob), mime, quality);
+  return canvas;
+}
 /** Serialized, temporary Node canvas/FileReader bindings; original bindings are restored even on failure. */
 export function exportScene(
   scene: Scene,
@@ -185,11 +198,24 @@ export function exportScene(
 ): Promise<Uint8Array> {
   const task = exportQueue.then(async () => {
     const snapshot = clone(scene);
+    const materialCopies = new Map<Material, Material>();
+    const textureCopies = new Map<Texture, Texture>();
+    const copyMaterial = (material: Material): Material => {
+      let copy = materialCopies.get(material);
+      if (!copy) {
+        copy = material.clone();
+        materialCopies.set(material, copy);
+      }
+      return copy;
+    };
     const remove: typeof snapshot.children = [];
     snapshot.traverse((object) => {
       if ((object as ThreeLight).isLight || (object as ThreeCamera).isCamera) remove.push(object);
       const mesh = object as Mesh;
       if (!mesh.material) return;
+      mesh.material = Array.isArray(mesh.material)
+        ? mesh.material.map(copyMaterial)
+        : copyMaterial(mesh.material);
       const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
       for (const material of materials) {
         const m = material as Material & {
@@ -206,14 +232,16 @@ export function exportScene(
           diagnostic(
             `Material ${m.name || m.type} bypasses Three.js tone mapping/unlit lighting; Blender output applies a global tone mapper`,
           );
-        for (const value of Object.values(material)) {
+        for (const [key, value] of Object.entries(material)) {
           const texture = value as Texture;
           if (!texture?.isTexture) continue;
           if ((texture as unknown as { isCompressedTexture: boolean }).isCompressedTexture)
             throw new Error(
               "Compressed textures require an explicit decoded texture or direct glTF input",
             );
-          const image = texture.image as { data?: unknown };
+          // Native canvases expose a data() method, rather than a raw pixel array.
+          if (texture.image instanceof Canvas || texture.image instanceof Image) continue;
+          const image = texture.image as { data?: unknown; width: number; height: number };
           if (
             image?.data &&
             !(image.data instanceof Uint8Array || image.data instanceof Uint8ClampedArray)
@@ -221,6 +249,26 @@ export function exportScene(
             diagnostic(
               "Material texture requires RGBA8 pixels; supply an explicitly converted texture",
             );
+          if (image?.data instanceof Uint8Array || image?.data instanceof Uint8ClampedArray) {
+            let copy = textureCopies.get(texture);
+            if (!copy) {
+              // GLTFExporter combines separate metalness/roughness maps with drawImage,
+              // which cannot draw a DataTexture's raw { data, width, height } image.
+              const { data, width, height } = image;
+              const canvas = createExportCanvas(width, height);
+              canvas
+                .getContext("2d")
+                .putImageData(new ImageData(new Uint8ClampedArray(data), width, height), 0, 0);
+              copy = texture.clone();
+              // Texture.clone shares its Source; replace it without touching the caller.
+              copy.source = new Source(canvas);
+              // Decoded KTX2 images retain their original MIME type in userData,
+              // but canvas encoders need a supported output format.
+              copy.userData.mimeType = "image/png";
+              textureCopies.set(texture, copy);
+            }
+            (material as unknown as Record<string, unknown>)[key] = copy;
+          }
         }
       }
     });
@@ -231,7 +279,7 @@ export function exportScene(
       document: {
         createElement: (tag: string) => {
           if (tag !== "canvas") throw new Error(`Unexpected export element ${tag}`);
-          return createCanvas(1, 1);
+          return createExportCanvas(1, 1);
         },
       },
       FileReader: NodeFileReader,
