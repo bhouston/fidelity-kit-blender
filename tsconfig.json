@@ -10,7 +10,9 @@
     "declaration": true,
     "outDir": "dist",
     "rootDir": "src",
-    "types": ["node"]
+    "types": ["node"],
+    "composite": true,
+    "tsBuildInfoFile": "dist/.tsbuildinfo"
   },
   "include": ["src/**/*.ts"],
   "exclude": ["src/**/*.test.ts"]

@@ -58,7 +58,6 @@ export async function renderGLTF(options: GLTFRenderOptions): Promise<RenderResu
         adaptiveThreshold: options.adaptiveThreshold ?? 0.01,
         device: options.device ?? "auto",
         transparent: options.background.type !== "environment",
-        cameraOnlyEmission: options.cameraOnlyEmission ?? false,
       }),
     );
     await runBlender(

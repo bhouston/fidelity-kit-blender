@@ -11,7 +11,8 @@
     "dist",
     "blender",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "THIRD_PARTY_LICENSES.txt"
   ],
   "type": "module",
   "exports": {

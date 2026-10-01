@@ -104,7 +104,7 @@ export async function discoverBlender(
   }
   const candidates = explicit ? [explicit] : ["blender", ...apps, ...(options.candidates ?? [])];
   const failures: string[] = [];
-  for (const executable of [...new Set(candidates)]) {
+  for (const executable of new Set(candidates)) {
     try {
       const output = await runBlender(executable, ["--version"], { timeoutMs: 5000 });
       const match = output.match(/Blender (\d+)\.(\d+)\.(\d+)/);

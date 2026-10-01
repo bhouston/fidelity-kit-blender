@@ -1,3 +1,4 @@
+import { EXRLoader } from "three/addons/loaders/EXRLoader.js";
 import { expect, it } from "vitest";
 import {
   Scene,
@@ -73,6 +74,10 @@ it("exports readable HDR data and rejects unsupported environment data", async (
   const texture = new DataTexture(new Float32Array([1, 0.5, 0.2, 1]), 1, 1, RGBAFormat, FloatType);
   const bytes = await exportEnvironment(texture);
   expect(new DataView(bytes.buffer).getUint32(0, true)).toBe(20000630);
+  const decoded = new EXRLoader().setDataType(FloatType).parse(bytes.buffer);
+  expect(decoded.data[0]).toBeCloseTo(1);
+  expect(decoded.data[1]).toBeCloseTo(0.5);
+  expect(decoded.data[2]).toBeCloseTo(0.2);
   await expect(exportEnvironment(new DataTexture(new Uint8Array(4), 1, 1))).rejects.toThrow(
     "explicitly",
   );

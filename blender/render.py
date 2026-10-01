@@ -42,7 +42,7 @@ if isinstance(selection, dict):
         if abs((right-left)/(top-bottom) - aspect) > 1e-5:
             raise ValueError("Orthographic camera bounds must match output aspect ratio")
         data.ortho_scale = max(right-left, top-bottom)
-        camera.matrix_world.translation += coordinate.to_3x3() @ Quaternion((w, x, y, z)) @ Vector(((left+right)/2, (bottom+top)/2, 0))
+        camera.matrix_world.translation += coordinate.to_3x3() @ (Quaternion((w, x, y, z)) @ Vector(((left+right)/2, (bottom+top)/2, 0)))
     scene.camera = camera
 elif isinstance(selection, str):
     camera = bpy.data.objects.get(selection)
@@ -130,18 +130,6 @@ cycles.max_bounces = bounces
 cycles.diffuse_bounces = bounces
 cycles.glossy_bounces = bounces
 cycles.transmission_bounces = bounces
-if job["cameraOnlyEmission"]:  # direct: like the pathtracer, emissive surfaces are seen (camera rays) but light nothing
-    for material in bpy.data.materials:
-        tree = material.node_tree
-        for node in list(tree.nodes) if tree else []:
-            strength = node.inputs.get("Emission Strength") if node.type == "BSDF_PRINCIPLED" else None
-            if strength is None or strength.is_linked:
-                continue
-            multiply = tree.nodes.new("ShaderNodeMath")
-            multiply.operation = "MULTIPLY"
-            multiply.inputs[1].default_value = strength.default_value
-            tree.links.new(tree.nodes.new("ShaderNodeLightPath").outputs["Is Camera Ray"], multiply.inputs[0])
-            tree.links.new(multiply.outputs["Value"], strength)
 # unbiased, like the pathtracer (filterGlossyFactor 0, no clamping), box-filtered pixels
 cycles.sample_clamp_direct = 0
 cycles.sample_clamp_indirect = 0

@@ -1,6 +1,7 @@
 import { Canvas, createCanvas, Image, ImageData } from "@napi-rs/canvas";
 import {
   Euler,
+  Object3D,
   HalfFloatType,
   FloatType,
   RGBAFormat,
@@ -32,7 +33,7 @@ import type {
   DataTexture,
 } from "three";
 import { GLTFExporter } from "three/addons/exporters/GLTFExporter.js";
-import { EXRExporter } from "three/addons/exporters/EXRExporter.js";
+import { EXRExporter, ZIPS_COMPRESSION } from "three/addons/exporters/EXRExporter.js";
 import { clone } from "three/addons/utils/SkeletonUtils.js";
 import { renderGLTF } from "./index.js";
 import type {
@@ -155,7 +156,7 @@ export async function exportEnvironment(texture: DataTexture): Promise<Uint8Arra
   }
   const copy = texture.clone();
   copy.image = { data: rows, width, height };
-  return new EXRExporter().parse(copy);
+  return new EXRExporter().parse(copy, { type: FloatType, compression: ZIPS_COMPRESSION });
 }
 class NodeFileReader {
   result: ArrayBuffer | string | null = null;
@@ -222,6 +223,8 @@ export function exportScene(
       }
     });
     for (const object of remove) object.removeFromParent();
+    // Blender glTF importer requires a scene node, including for environment-only renders.
+    if (snapshot.children.length === 0) snapshot.add(new Object3D());
     const bindings: Record<string, unknown> = {
       document: {
         createElement: (tag: string) => {
@@ -268,7 +271,10 @@ export async function renderScene(options: SceneRenderOptions) {
     environment = {
       bytes: await exportEnvironment(scene.environment as DataTexture),
       intensity: scene.environmentIntensity,
-      rotation: new Euler().copy(scene.environmentRotation).toArray().slice(0, 3) as Vec3,
+      rotation: new Euler()
+        .setFromQuaternion(new Quaternion().setFromEuler(scene.environmentRotation), "XYZ")
+        .toArray()
+        .slice(0, 3) as Vec3,
     };
   }
   let background = options.background;

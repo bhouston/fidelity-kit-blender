@@ -60,8 +60,6 @@ export interface RenderOptions {
   signal?: AbortSignal;
   timeoutMs?: number;
   onLog?: (line: string) => void;
-  /** Fidelity direct pass: show emission to camera rays only. */
-  cameraOnlyEmission?: boolean;
 }
 export interface RenderResult {
   width: number;

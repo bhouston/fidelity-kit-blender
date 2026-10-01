@@ -47,7 +47,7 @@ The initial supported target is static scenes using MeshStandardMaterial/MeshPhy
 
 Custom GLSL/TSL shaders, postprocessing, fog, area/ambient/hemisphere lights, projected spot textures, per-material tone-mapping bypass, finite light-distance cutoffs and nonphysical light decay are not translated. Unsupported features throw by default; `unsupported: 'warn'` reports through `onDiagnostic` (or console.warn) and permits deliberate approximations. Material replacement should be explicit. GLTFExporter/Blender material-extension coverage depends on both versions; validate advanced extensions against your own fixtures. Cycles and Three.js BRDFs, spot penumbra profiles, alpha handling, sampling and light transport can differ. This package does not promise pixel identity.
 
-Rendering defaults: 256 samples, 8 bounces, seed 1, adaptive threshold 0.01, denoising off, automatic GPU selection with CPU fallback. Set `device: 'cpu' | 'gpu' | 'auto'`, `denoise`, `bounces`, or `adaptiveThreshold` explicitly as needed. `cameraOnlyEmission` supports fidelity suites that display emission but exclude its contribution to illumination. An environment background currently shares lighting intensity and rotation.
+Rendering defaults: 256 samples, 8 bounces, seed 1, adaptive threshold 0.01, denoising off, automatic GPU selection with CPU fallback. Set `device: 'cpu' | 'gpu' | 'auto'`, `denoise`, `bounces`, or `adaptiveThreshold` explicitly as needed. An environment background currently shares lighting intensity and rotation.
 
 ## Runtime utilities
 
