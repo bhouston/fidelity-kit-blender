@@ -10,7 +10,39 @@ vi.mock("node:os", async (importOriginal) => {
     setPriority: vi.fn(actual.setPriority),
   };
 });
-import { discoverBlender, runBlender } from "./runtime.js";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { discoverBlender, installedBlenders, runBlender } from "./runtime.js";
+it("lists official Windows installs newest first", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "fidelity-kit-blender-programfiles-"));
+  const x86 = await mkdtemp(path.join(tmpdir(), "fidelity-kit-blender-programfiles-x86-"));
+  try {
+    for (const name of ["Blender 4.2", "Blender 5.2", "Blender 10.0", "Blender", "Other"])
+      await mkdir(path.join(root, "Blender Foundation", name), { recursive: true });
+    await mkdir(path.join(x86, "Blender Foundation", "Blender 3.6"), { recursive: true });
+    await writeFile(path.join(root, "Blender Foundation", "notes.txt"), "");
+    const exe = (base: string, name: string) =>
+      path.join(base, "Blender Foundation", name, "blender.exe");
+    await expect(
+      installedBlenders("win32", { ProgramFiles: root, "ProgramFiles(x86)": x86 }),
+    ).resolves.toEqual([
+      exe(root, "Blender"),
+      exe(root, "Blender 10.0"),
+      exe(root, "Blender 5.2"),
+      exe(root, "Blender 4.2"),
+      exe(x86, "Blender 3.6"),
+    ]);
+    await expect(
+      installedBlenders("win32", { ProgramFiles: root, "ProgramFiles(x86)": root }),
+    ).resolves.toHaveLength(4);
+    await expect(installedBlenders("win32", {})).resolves.toEqual([]);
+    await expect(installedBlenders("linux", { ProgramFiles: root })).resolves.toEqual([]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+    await rm(x86, { recursive: true, force: true });
+  }
+});
 it("reports subprocess failures and bounded logs", async () => {
   await expect(
     runBlender(process.execPath, ["-e", 'console.error("fixture failed");process.exit(3)']),

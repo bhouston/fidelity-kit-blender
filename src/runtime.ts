@@ -96,30 +96,57 @@ export interface BlenderRuntime {
   executable: string;
   version: string;
 }
+/** Unversioned names first, then newest version first. */
+const newestFirst = (unversioned: string) => (a: string, b: string) =>
+  a === unversioned ? -1 : b === unversioned ? 1 : b.localeCompare(a, undefined, { numeric: true });
+
+/**
+ * Executables in standard install locations: macOS Applications bundles, and on Windows the official
+ * installer's `Blender Foundation\Blender <version>` directories (Microsoft Store builds can't run headless).
+ * Directories without an executable are kept; probing them fails and discovery moves on.
+ */
+export async function installedBlenders(
+  platform: NodeJS.Platform = process.platform,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<string[]> {
+  const found: string[] = [];
+  if (platform === "darwin") {
+    for (const directory of ["/Applications", path.join(env.HOME ?? "", "Applications")]) {
+      const entries = await readdir(directory).catch(() => [] as string[]);
+      found.push(
+        ...entries
+          .filter((name) => /^Blender(?:\s+.*)?\.app$/.test(name))
+          .sort(newestFirst("Blender.app"))
+          .map((name) => path.join(directory, name, "Contents/MacOS/Blender")),
+      );
+    }
+  } else if (platform === "win32") {
+    const roots = [env.ProgramFiles, env["ProgramFiles(x86)"]].filter(
+      (root): root is string => !!root,
+    );
+    for (const root of new Set(roots)) {
+      const directory = path.join(root, "Blender Foundation");
+      const entries = await readdir(directory).catch(() => [] as string[]);
+      found.push(
+        ...entries
+          .filter((name) => /^Blender(?:\s+.*)?$/.test(name))
+          .sort(newestFirst("Blender"))
+          .map((name) => path.join(directory, name, "blender.exe")),
+      );
+    }
+  }
+  return found;
+}
+
 /** Explicit overrides are authoritative: an invalid override fails instead of silently selecting another install. */
 export async function discoverBlender(
   options: { executable?: string; candidates?: string[] } = {},
 ): Promise<BlenderRuntime> {
   const explicit = options.executable ?? process.env.BLENDER_EXECUTABLE?.trim();
-  let apps: string[] = [];
-  if (!explicit && process.platform === "darwin") {
-    for (const directory of ["/Applications", path.join(process.env.HOME ?? "", "Applications")]) {
-      const entries = await readdir(directory).catch(() => [] as string[]);
-      apps.push(
-        ...entries
-          .filter((name) => /^Blender(?:\s+.*)?\.app$/.test(name))
-          .sort((a, b) =>
-            a === "Blender.app"
-              ? -1
-              : b === "Blender.app"
-                ? 1
-                : b.localeCompare(a, undefined, { numeric: true }),
-          )
-          .map((name) => path.join(directory, name, "Contents/MacOS/Blender")),
-      );
-    }
-  }
-  const candidates = explicit ? [explicit] : ["blender", ...apps, ...(options.candidates ?? [])];
+  const installed = explicit ? [] : await installedBlenders();
+  const candidates = explicit
+    ? [explicit]
+    : ["blender", ...installed, ...(options.candidates ?? [])];
   const failures: string[] = [];
   for (const executable of new Set(candidates)) {
     try {
