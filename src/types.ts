@@ -18,7 +18,18 @@ export type Background =
   | { type: "transparent" }
   | { type: "environment" }
   | { type: "color"; color: Vec3 }
-  | { type: "gradient"; center: Vec3; edge: Vec3 };
+  | { type: "gradient"; center: Vec3; edge: Vec3 }
+  | { type: "equirectangular"; texture: Environment };
+export interface DepthOfField {
+  /** Aperture diameter in millimeters, matching PhysicalCamera.bokehSize. */
+  apertureDiameter: number;
+  /** Distance along the camera axis in scene world units. */
+  focusDistance: number;
+  /** 0 for a disk, or an integer >= 3 for a polygon. */
+  apertureBlades?: number;
+  /** Radians. */
+  apertureRotation?: number;
+}
 export interface Camera {
   type: "perspective" | "orthographic";
   position: Vec3;
@@ -31,9 +42,10 @@ export interface Camera {
   right?: number;
   top?: number;
   bottom?: number;
+  depthOfField?: DepthOfField;
 }
 /** Intensity: directional lux; point/spot candela, matching Three.js/glTF. */
-export interface Light {
+export interface PunctualLight {
   type: "directional" | "point" | "spot";
   position: Vec3;
   direction?: Vec3;
@@ -42,6 +54,18 @@ export interface Light {
   innerConeAngle?: number;
   outerConeAngle?: number;
 }
+/** Area-light intensity is linear radiance; width/height are world units, unaffected by parent scale. */
+export interface AreaLight {
+  type: "area";
+  position: Vec3;
+  quaternion: [number, number, number, number];
+  color: Vec3;
+  intensity: number;
+  width: number;
+  height: number;
+  circular?: boolean;
+}
+export type Light = PunctualLight | AreaLight;
 export interface RenderOptions {
   width: number;
   height: number;

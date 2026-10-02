@@ -29,6 +29,7 @@ import type {
   DirectionalLight,
   SpotLight,
   PointLight,
+  RectAreaLight,
   Mesh,
   Material,
   Texture,
@@ -42,6 +43,7 @@ import type {
   Camera,
   Environment,
   Light,
+  PunctualLight,
   RenderOptions,
   ToneMapping,
   Vec3,
@@ -54,8 +56,15 @@ export interface SceneRenderOptions extends Omit<RenderOptions, "background"> {
   /** Unsupported features throw by default; choose warn to knowingly approximate/omit them. */
   unsupported?: "error" | "warn";
   onDiagnostic?: (message: string) => void;
+  /** Optional scene translations; omitted/false retains strict unsupported-feature diagnostics. */
+  features?: { areaLights?: boolean; depthOfField?: boolean; textureBackground?: boolean };
 }
-export function cameraDescriptor(camera: ThreeCamera): Camera {
+export function cameraDescriptor(camera: ThreeCamera, depthOfField = false): Camera {
+  const aperture = (camera as ThreeCamera & { bokehSize?: number }).bokehSize;
+  if (aperture !== undefined && (!Number.isFinite(aperture) || aperture < 0))
+    throw new Error("bokehSize must be a finite nonnegative aperture diameter");
+  if (aperture && !(camera as PerspectiveCamera).isPerspectiveCamera)
+    throw new Error("Depth of field requires a perspective camera");
   camera.updateWorldMatrix(true, false);
   const p = camera.getWorldPosition(new Vector3()).toArray() as Vec3;
   const q = camera.getWorldQuaternion(new Quaternion()).toArray() as Camera["quaternion"];
@@ -70,6 +79,10 @@ export function cameraDescriptor(camera: ThreeCamera): Camera {
       near: c.near,
       far: c.far,
       fov: (c.getEffectiveFOV() * Math.PI) / 180,
+      depthOfField:
+        depthOfField && (c as PerspectiveCamera & { bokehSize?: number }).bokehSize
+          ? physicalDepthOfField(c)
+          : undefined,
     };
   }
   if ((camera as OrthographicCamera).isOrthographicCamera) {
@@ -91,11 +104,51 @@ export function cameraDescriptor(camera: ThreeCamera): Camera {
   }
   throw new Error("Specify a PerspectiveCamera or OrthographicCamera");
 }
-export function lightDescriptors(scene: Scene, diagnostic: (message: string) => void): Light[] {
+function physicalDepthOfField(camera: PerspectiveCamera) {
+  const physical = camera as PerspectiveCamera & {
+    bokehSize: number;
+    focusDistance: number;
+    apertureBlades?: number;
+    apertureRotation?: number;
+    anamorphicRatio?: number;
+  };
+  if (physical.anamorphicRatio !== undefined && physical.anamorphicRatio !== 1)
+    throw new Error("Anamorphic depth of field requires anamorphicRatio=1");
+  return {
+    apertureDiameter: physical.bokehSize,
+    focusDistance: physical.focusDistance,
+    apertureBlades: physical.apertureBlades ?? 0,
+    apertureRotation: physical.apertureRotation ?? 0,
+  };
+}
+export function lightDescriptors(
+  scene: Scene,
+  diagnostic: (message: string) => void,
+  areaLights = false,
+): Light[] {
   scene.updateMatrixWorld(true);
   const lights: Light[] = [];
   scene.traverseVisible((object) => {
     if (!(object as ThreeLight).isLight) return;
+    if (areaLights && (object as RectAreaLight).isRectAreaLight) {
+      const area = object as RectAreaLight & { isCircular?: boolean };
+      lights.push({
+        type: "area",
+        position: area.getWorldPosition(new Vector3()).toArray() as Vec3,
+        quaternion: area.getWorldQuaternion(new Quaternion()).toArray() as [
+          number,
+          number,
+          number,
+          number,
+        ],
+        color: area.color.toArray() as Vec3,
+        intensity: area.intensity,
+        width: area.width,
+        height: area.height,
+        circular: Boolean(area.isCircular),
+      });
+      return;
+    }
     const l = object as DirectionalLight & SpotLight & PointLight;
     const type = l.isDirectionalLight
       ? "directional"
@@ -117,7 +170,7 @@ export function lightDescriptors(scene: Scene, diagnostic: (message: string) => 
     if (type === "spot" && l.map)
       diagnostic(`SpotLight ${l.name} projection texture is unsupported`);
     const position = l.getWorldPosition(new Vector3());
-    const light: Light = {
+    const light: PunctualLight = {
       type,
       position: position.toArray() as Vec3,
       color: l.color.toArray() as Vec3,
@@ -314,8 +367,10 @@ export async function renderScene(options: SceneRenderOptions) {
     (options.onDiagnostic ?? console.warn)(message);
   };
   if (scene.fog) diagnostic("Scene fog is unsupported");
-  const lights = lightDescriptors(scene, diagnostic);
-  const cameraData = cameraDescriptor(camera);
+  const lights = lightDescriptors(scene, diagnostic, options.features?.areaLights);
+  if ((camera as ThreeCamera & { bokehSize?: number }).bokehSize && !options.features?.depthOfField)
+    diagnostic("Physical-camera depth of field requires features.depthOfField=true");
+  const cameraData = cameraDescriptor(camera, options.features?.depthOfField);
   let environment: Environment | null | undefined = options.environment;
   if (environment === undefined && scene.environment) {
     environment = {
@@ -339,6 +394,22 @@ export async function renderScene(options: SceneRenderOptions) {
       scene.backgroundBlurriness === 0
     )
       background = { type: "environment" };
+    else if (
+      options.features?.textureBackground &&
+      (scene.background as DataTexture).isDataTexture &&
+      scene.backgroundBlurriness === 0
+    )
+      background = {
+        type: "equirectangular",
+        texture: {
+          bytes: await exportEnvironment(scene.background as DataTexture),
+          intensity: scene.backgroundIntensity,
+          rotation: new Euler()
+            .setFromQuaternion(new Quaternion().setFromEuler(scene.backgroundRotation), "XYZ")
+            .toArray()
+            .slice(0, 3) as Vec3,
+        },
+      };
     else
       throw new Error(
         "Specify background explicitly for a separate/blurred/rotated background texture",
