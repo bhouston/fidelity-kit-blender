@@ -84,7 +84,7 @@ await runBlender(
 );
 ```
 
-Discovery uses an explicit executable or `BLENDER_EXECUTABLE` authoritatively; otherwise it tries PATH, macOS Applications directories, and custom candidates. Execution uses no shell, retains bounded failure output, supports cancellation/timeouts and process-group cleanup on POSIX. On Windows, cancellation terminates the direct child; complete helper-process cleanup is not yet supported. MaterialX-specific scripts and custom runtime probes belong in consuming adapters.
+Discovery uses an explicit executable or `BLENDER_EXECUTABLE` authoritatively; otherwise it tries PATH, macOS Applications directories, the official Windows installer's `%ProgramFiles%\Blender Foundation\Blender <version>` directories (newest first), and custom candidates. Microsoft Store builds of Blender cannot run headless; install the official build or set `BLENDER_EXECUTABLE`. Execution uses no shell, retains bounded failure output, supports cancellation/timeouts and process-group cleanup on POSIX. On Windows, cancellation terminates the direct child; complete helper-process cleanup is not yet supported. MaterialX-specific scripts and custom runtime probes belong in consuming adapters.
 
 ## Development
 
