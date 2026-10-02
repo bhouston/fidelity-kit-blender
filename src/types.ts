@@ -75,6 +75,8 @@ export interface RenderOptions {
   denoise?: boolean;
   adaptiveThreshold?: number;
   device?: "auto" | "cpu" | "gpu";
+  /** Throw when every output RGB value is 0, which usually means a failed render. Defaults to true. */
+  failAllBlack?: boolean;
   environment?: Environment | null;
   background: Background;
   toneMapping: ToneMapping | ((rgb: Vec3, exposure: number) => Vec3);

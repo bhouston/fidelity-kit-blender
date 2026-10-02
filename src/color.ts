@@ -101,6 +101,22 @@ function backgroundAt(
   return background.center.map((c, i) => c + (background.edge[i]! - c) * t) as Vec3;
 }
 /** Input is top-first premultiplied scene-linear RGBA. Output uses straight alpha. */
+/** True when every RGB value of an RGBA8 image is 0. */
+export function isAllBlack(pixels: Uint8Array): boolean {
+  for (let i = 0; i < pixels.length; i += 4)
+    if (pixels[i] || pixels[i + 1] || pixels[i + 2]) return false;
+  return true;
+}
+
+/** Throws on an all-black image unless `failAllBlack` is false. */
+export function assertNotAllBlack(
+  pixels: Uint8Array,
+  { failAllBlack = true }: Pick<RenderOptions, "failAllBlack"> = {},
+): void {
+  if (failAllBlack && isAllBlack(pixels))
+    throw new Error("Render is all black; set failAllBlack: false if that is expected");
+}
+
 export function encodeLinear(
   linear: Float32Array,
   options: Pick<
