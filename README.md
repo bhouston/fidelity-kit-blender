@@ -39,15 +39,32 @@ The Three.js adapter exports a cloned scene to GLB, transfers the selected camer
 
 Environment input accepts exactly one of `path` (HDR/EXR) or `bytes` (HDR/EXR bytes), with optional intensity and rotation. Rotation is an XYZ Euler triple **in radians**, in Three.js Y-up coordinates, matching `Scene.environmentRotation`; positive Y rotates the environment around world up. When environment is omitted, a readable RGBA float/half-float equirectangular `scene.environment` is exported, including its intensity and rotation. A GPU-only, PMREM, compressed, cube, or procedural environment needs an explicit original IBL. Callers may bake procedural environments themselves and pass the result; the package does not initialize a GPU renderer to infer them. Set `environment: null` to disable environment lighting.
 
-Background types are `transparent`, `environment`, `color` (linear RGB), and `gradient` (linear center/edge RGB). When omitted from `renderScene`, simple scene backgrounds are extracted. Separate, blurred, or independently rotated texture backgrounds require an explicit supported background. Colors composite in linear space before tone mapping. Encoders consuming `result.pixels` must attach color metadata matching `result.outputColorSpace`; this API returns pixels rather than an encoded image file.
+Background types are `transparent`, `environment`, `color` (linear RGB), and `gradient` (linear center/edge RGB). When omitted from `renderScene`, simple scene backgrounds are extracted. Separate readable equirectangular texture backgrounds can be extracted with `features: { textureBackground: true }`, or supplied explicitly as `{ type: "equirectangular", texture: { path: "/assets/background.exr", intensity: 1, rotation: [0, 0, 0] } }`. Background input accepts the same path/bytes format as environment input and has independent intensity and rotation. Blurred or GPU-only backgrounds still require a baked replacement. Colors composite in linear space before tone mapping. Encoders consuming `result.pixels` must attach color metadata matching `result.outputColorSpace`; this API returns pixels rather than an encoded image file.
 
 ## Scope and diagnostics
 
-The initial supported target is static scenes using MeshStandardMaterial/MeshPhysicalMaterial, ordinary perspective/orthographic cameras, RGBA8 readable material textures or native canvas images, and directional/point/spot lights. Skin/morph data travels through GLTFExporter; animated pose matching is not yet certified. Orthographic bounds must match output aspect. Camera view/film offsets require a replacement camera. No automatic model normalization or camera framing is performed.
+The initial supported target is static scenes using MeshStandardMaterial/MeshPhysicalMaterial, ordinary perspective/orthographic cameras, physical perspective-camera depth of field, rectangular/circular area lights, RGBA8 readable material textures or native canvas images, and directional/point/spot lights. Skin/morph data travels through GLTFExporter; animated pose matching is not yet certified. Orthographic bounds must match output aspect. Camera view/film offsets require a replacement camera. No automatic model normalization or camera framing is performed.
 
-Custom GLSL/TSL shaders, postprocessing, fog, area/ambient/hemisphere lights, projected spot textures, per-material tone-mapping bypass, finite light-distance cutoffs and nonphysical light decay are not translated. Unsupported features throw by default; `unsupported: 'warn'` reports through `onDiagnostic` (or console.warn) and permits deliberate approximations. Material replacement should be explicit. GLTFExporter/Blender material-extension coverage depends on both versions; validate advanced extensions against your own fixtures. Cycles and Three.js BRDFs, spot penumbra profiles, alpha handling, sampling and light transport can differ. This package does not promise pixel identity.
+Custom GLSL/TSL shaders, postprocessing, fog, ambient/hemisphere lights, projected spot textures, per-material tone-mapping bypass, finite light-distance cutoffs and nonphysical light decay are not translated. Unsupported features throw by default; `unsupported: 'warn'` reports through `onDiagnostic` (or console.warn) and permits deliberate approximations. Material replacement should be explicit. GLTFExporter/Blender material-extension coverage depends on both versions; validate advanced extensions against your own fixtures. Cycles and Three.js BRDFs, spot penumbra profiles, alpha handling, sampling and light transport can differ. This package does not promise pixel identity.
 
-Rendering defaults: 256 samples, 8 bounces, seed 1, adaptive threshold 0.01, denoising off, automatic GPU selection with CPU fallback. Set `device: 'cpu' | 'gpu' | 'auto'`, `denoise`, `bounces`, or `adaptiveThreshold` explicitly as needed. An environment background currently shares lighting intensity and rotation.
+Rendering defaults: 256 samples, 8 bounces, seed 1, adaptive threshold 0.01, denoising off, automatic GPU selection with CPU fallback. Set `device: 'cpu' | 'gpu' | 'auto'`, `denoise`, `bounces`, or `adaptiveThreshold` explicitly as needed. An `environment` background shares lighting intensity and rotation; an `equirectangular` background is independent. Setting `adaptiveThreshold: 0` disables adaptive sampling.
+
+## Area lights and depth of field
+
+Enable area-light and physical-camera depth-of-field extraction with
+`features: { areaLights: true, depthOfField: true }` in `renderScene`. Defaults retain strict diagnostics;
+explicit `renderGLTF` area-light and camera descriptors are accepted directly. `RectAreaLight` emits along local -Z; position and quaternion are world-space, while width/height are
+unscaled world units, matching the legacy pathtracer. `isCircular: true` selects an elliptical emitter. Color times
+intensity is linear radiance; Cycles power is radiance × emitting area × π. Camera rays do not show the light.
+The explicit `renderGLTF` descriptor is `{ type: "area", position, quaternion, color, intensity, width, height,
+circular?: boolean }`; quaternions use XYZW order and must be unit length.
+
+A perspective camera with positive `bokehSize` and `focusDistance` carries its depth of field when `features.depthOfField` is enabled.
+`bokehSize` is aperture **diameter in millimeters**; focus distance is in scene world units. Optional
+`apertureBlades` (0 or >= 3) and `apertureRotation` (radians) are preserved. The explicit camera descriptor accepts
+`depthOfField: { apertureDiameter, focusDistance, apertureBlades?, apertureRotation? }`.
+`bokehSize: 0` leaves depth of field disabled. Anamorphic ratios other than 1 are rejected pending a certified
+mapping. Area-light sampling and aperture distributions can still differ between Cycles and the pathtracer.
 
 ## Runtime utilities
 

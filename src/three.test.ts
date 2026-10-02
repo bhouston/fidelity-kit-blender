@@ -147,3 +147,59 @@ it("copies explicit renderer settings", () => {
     }),
   ).toEqual({ toneMapping: "aces-filmic", toneMappingExposure: 2, outputColorSpace: "srgb" });
 });
+
+it("extracts rectangular/circular area lights without mutating parents or dimensions", async () => {
+  const { Group, RectAreaLight } = await import("three");
+  const scene = new Scene();
+  const parent = new Group();
+  parent.position.set(1, 0, 0);
+  parent.rotation.y = Math.PI / 2;
+  parent.scale.setScalar(0.5);
+  const area = new RectAreaLight(0xffffff, 3, 2, 4);
+  area.position.set(0, 2, 0);
+  Object.assign(area, { isCircular: true });
+  parent.add(area);
+  scene.add(parent);
+  const fail = (message: string) => {
+    throw new Error(message);
+  };
+  expect(() => lightDescriptors(scene, fail)).toThrow("Unsupported light");
+  const [descriptor] = lightDescriptors(scene, fail, true);
+  expect(descriptor).toMatchObject({
+    type: "area",
+    position: [1, 1, 0],
+    width: 2,
+    height: 4,
+    color: [1, 1, 1],
+    intensity: 3,
+    circular: true,
+  });
+  if (descriptor?.type !== "area") throw new Error("Expected area light");
+  expect(descriptor.quaternion[1]).toBeCloseTo(Math.SQRT1_2);
+  expect(descriptor.quaternion[3]).toBeCloseTo(Math.SQRT1_2);
+  expect(area.parent).toBe(parent);
+  expect(area.width).toBe(2);
+  area.visible = false;
+  expect(lightDescriptors(scene, fail, true)).toEqual([]);
+});
+
+it("extracts physical depth of field in explicit millimeter/world units", () => {
+  const camera = new PerspectiveCamera();
+  Object.assign(camera, {
+    bokehSize: 10,
+    focusDistance: 4,
+    apertureBlades: 6,
+    apertureRotation: 0.3,
+    anamorphicRatio: 1,
+  });
+  expect(cameraDescriptor(camera).depthOfField).toBeUndefined();
+  expect(cameraDescriptor(camera, true).depthOfField).toEqual({
+    apertureDiameter: 10,
+    focusDistance: 4,
+    apertureBlades: 6,
+    apertureRotation: 0.3,
+  });
+  expect(camera.position.toArray()).toEqual([0, 0, 0]);
+  Object.assign(camera, { anamorphicRatio: 2 });
+  expect(() => cameraDescriptor(camera, true)).toThrow("anamorphicRatio");
+});

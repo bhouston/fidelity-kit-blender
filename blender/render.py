@@ -54,19 +54,39 @@ else:
 if scene.camera is None:
     raise ValueError("Specify a camera or include one in the glTF")
 
+dof = selection.get("depthOfField") if isinstance(selection, dict) else None
+if dof:
+    data = scene.camera.data
+    data.dof.use_dof = True
+    data.dof.focus_distance = dof["focusDistance"]
+    data.dof.aperture_fstop = data.lens / dof["apertureDiameter"]
+    data.dof.aperture_blades = dof.get("apertureBlades", 0)
+    data.dof.aperture_rotation = dof.get("apertureRotation", 0)
+
 if job["replaceLights"]:
     for obj in list(scene.objects):
         if obj.type == "LIGHT":
             bpy.data.objects.remove(obj, do_unlink=True)
 for item in job["lights"]:
-    kind = {"directional": "SUN", "point": "POINT", "spot": "SPOT"}[item["type"]]
+    kind = {"directional": "SUN", "point": "POINT", "spot": "SPOT", "area": "AREA"}[item["type"]]
     data = bpy.data.lights.new("three_blender_light", kind)
     data.color = item["color"]
     data.energy = item["intensity"] if kind == "SUN" else item["intensity"] * 4 * math.pi
     obj = bpy.data.objects.new(data.name, data)
     scene.collection.objects.link(obj)
     obj.location = coordinate.to_3x3() @ Vector(item["position"])
-    if kind != "POINT":
+    if kind == "AREA":
+        data.shape = "ELLIPSE" if item.get("circular") else "RECTANGLE"
+        data.size = item["width"]
+        data.size_y = item["height"]
+        surface = item["width"] * item["height"] * (math.pi / 4 if item.get("circular") else 1)
+        data.energy = item["intensity"] * surface * math.pi
+        x, y, z, w = item["quaternion"]
+        rotation = Quaternion((w, x, y, z)).to_matrix().to_4x4()
+        rotation.translation = Vector(item["position"])
+        obj.matrix_world = coordinate @ rotation
+        obj.visible_camera = False
+    elif kind != "POINT":
         direction = coordinate.to_3x3() @ Vector(item["direction"])
         obj.rotation_euler = direction.to_track_quat("-Z", "Y").to_euler()
     if kind == "SPOT":
@@ -75,7 +95,8 @@ for item in job["lights"]:
         data.spot_blend = 1 - item["innerConeAngle"] / outer if outer > 0 else 0
 
 for light in bpy.data.lights:  # glTF (and three.js) lights are punctual
-    light.shadow_soft_size = 0
+    if light.type in ("POINT", "SPOT", "SUN"):
+        light.shadow_soft_size = 0
     if light.type == "SUN":
         light.angle = 0
 
@@ -97,11 +118,11 @@ scene.world = world
 world.use_nodes = True
 background = world.node_tree.nodes["Background"]
 environment = job.get("environment")
-if environment:
+def environment_shader(source, shader):
     texture = world.node_tree.nodes.new("ShaderNodeTexEnvironment")
-    texture.image = bpy.data.images.load(environment["path"])
+    texture.image = bpy.data.images.load(source["path"])
     # Conjugate inverse Three.js XYZ environment rotation into Blender coordinates.
-    rx, ry, rz = environment["rotation"]
+    rx, ry, rz = source["rotation"]
     c1, c2, c3 = (math.cos(v / 2) for v in (rx, ry, rz))
     s1, s2, s3 = (math.sin(v / 2) for v in (rx, ry, rz))
     q = Quaternion((c1*c2*c3-s1*s2*s3, s1*c2*c3+c1*s2*s3, c1*s2*c3-s1*c2*s3, c1*c2*s3+s1*s2*c3))
@@ -112,16 +133,40 @@ if environment:
     texcoord = world.node_tree.nodes.new("ShaderNodeTexCoord")
     world.node_tree.links.new(texcoord.outputs["Generated"], mapping.inputs["Vector"])
     world.node_tree.links.new(mapping.outputs["Vector"], texture.inputs["Vector"])
-    world.node_tree.links.new(texture.outputs["Color"], background.inputs["Color"])
-    background.inputs["Strength"].default_value = environment["intensity"]
+    world.node_tree.links.new(texture.outputs["Color"], shader.inputs["Color"])
+    shader.inputs["Strength"].default_value = source["intensity"]
+if environment:
+    environment_shader(environment, background)
 else:
     background.inputs["Color"].default_value = (0, 0, 0, 1)
+    background.inputs["Strength"].default_value = 0
+backdrop = job.get("backgroundTexture")
+if backdrop:
+    nodes, links = world.node_tree.nodes, world.node_tree.links
+    shader = nodes.new("ShaderNodeBackground")
+    environment_shader(backdrop, shader)
+    # Camera and transmission-only paths see the independent background, while other rays see the IBL.
+    light_path = nodes.new("ShaderNodeLightPath")
+    depth = nodes.new("ShaderNodeMath")
+    depth.operation = "SUBTRACT"
+    links.new(light_path.outputs["Ray Depth"], depth.inputs[0])
+    links.new(light_path.outputs["Transmission Depth"], depth.inputs[1])
+    seen = nodes.new("ShaderNodeMath")
+    seen.operation = "COMPARE"
+    seen.inputs[1].default_value = 1
+    seen.inputs[2].default_value = 0.5
+    links.new(depth.outputs["Value"], seen.inputs[0])
+    mix = nodes.new("ShaderNodeMixShader")
+    links.new(seen.outputs["Value"], mix.inputs["Fac"])
+    links.new(background.outputs["Background"], mix.inputs[1])
+    links.new(shader.outputs["Background"], mix.inputs[2])
+    links.new(mix.outputs["Shader"], nodes["World Output"].inputs["Surface"])
 
 scene.render.engine = "CYCLES"
 cycles = scene.cycles
 cycles.samples = job["samples"]
 # adaptive sampling only stops sampling a pixel early once it has converged within the threshold: free speed, no bias
-cycles.use_adaptive_sampling = True
+cycles.use_adaptive_sampling = job["adaptiveThreshold"] > 0
 cycles.adaptive_threshold = job["adaptiveThreshold"]
 cycles.seed = job["seed"]
 cycles.use_denoising = job["denoise"]
