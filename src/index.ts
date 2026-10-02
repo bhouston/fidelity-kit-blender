@@ -4,11 +4,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { FloatType } from "three";
 import { EXRLoader } from "three/addons/loaders/EXRLoader.js";
-import { encodeLinear } from "./color.js";
+import { assertNotAllBlack, encodeLinear } from "./color.js";
 import { discoverBlender, runBlender } from "./runtime.js";
 import type { Camera, Light, RenderOptions, RenderResult } from "./types.js";
 export type * from "./types.js";
-export { encodeLinear, toneMap, linearToSRGB } from "./color.js";
+export { assertNotAllBlack, encodeLinear, isAllBlack, toneMap, linearToSRGB } from "./color.js";
 export interface GLTFRenderOptions extends RenderOptions {
   gltf: string | Uint8Array;
   /** Omit to use the first imported camera, or select an imported camera by name. */
@@ -98,11 +98,13 @@ export async function renderGLTF(options: GLTFRenderOptions): Promise<RenderResu
         bottomFirst.subarray(y * stride, (y + 1) * stride),
         (options.height - 1 - y) * stride,
       );
+    const pixels = encodeLinear(linear, options);
+    assertNotAllBlack(pixels, options);
     return {
       width: options.width,
       height: options.height,
       linear,
-      pixels: encodeLinear(linear, options),
+      pixels,
       outputColorSpace: options.outputColorSpace,
       blenderVersion: runtime.version,
     };
@@ -123,6 +125,8 @@ export function validateOptions(options: RenderOptions): void {
     )
   )
     throw new Error("Specify background explicitly");
+  if (options.failAllBlack !== undefined && typeof options.failAllBlack !== "boolean")
+    throw new Error("failAllBlack must be a boolean");
   if (!["srgb", "srgb-linear"].includes(options.outputColorSpace))
     throw new Error("Specify outputColorSpace as srgb or srgb-linear");
   if (!Number.isFinite(options.toneMappingExposure) || options.toneMappingExposure < 0)

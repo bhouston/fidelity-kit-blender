@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { encodeLinear, linearToSRGB, toneMap } from "./color.js";
+import { assertNotAllBlack, encodeLinear, isAllBlack, linearToSRGB, toneMap } from "./color.js";
 import type { RenderOptions, ToneMapping } from "./types.js";
 const options = {
   width: 1,
@@ -47,5 +47,17 @@ describe("Three.js output pipeline", () => {
     }
     expect(toneMap([0.18, 0.18, 0.18], "aces-filmic", 1)[0]).toBeCloseTo(0.213105, 5);
     expect(toneMap([0.18, 0.18, 0.18], "neutral", 1)[0]).toBeCloseTo(0.14, 8);
+  });
+});
+
+describe("all-black detection", () => {
+  it("ignores alpha and fails all-black images unless disabled", () => {
+    const black = new Uint8Array([0, 0, 0, 255, 0, 0, 0, 0]);
+    const dim = new Uint8Array([0, 0, 0, 255, 0, 0, 1, 255]);
+    expect(isAllBlack(black)).toBe(true);
+    expect(isAllBlack(dim)).toBe(false);
+    expect(() => assertNotAllBlack(black)).toThrow("all black");
+    expect(() => assertNotAllBlack(black, { failAllBlack: false })).not.toThrow();
+    expect(() => assertNotAllBlack(dim)).not.toThrow();
   });
 });

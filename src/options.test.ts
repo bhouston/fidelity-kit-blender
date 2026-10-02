@@ -20,6 +20,9 @@ it("rejects invalid explicit settings before starting Blender", () => {
   expect(() =>
     validateOptions({ ...options, environment: { path: "studio.exr", rotation: [0, NaN, 0] } }),
   ).toThrow("rotation");
+  expect(() =>
+    validateOptions({ ...options, failAllBlack: "no" } as unknown as RenderOptions),
+  ).toThrow("failAllBlack");
   expect(() => validateOptions({ ...options, background: { type: "environment" } })).toThrow(
     "requires an environment",
   );
