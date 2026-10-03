@@ -194,3 +194,44 @@ it.skipIf(process.env.BLENDER_INTEGRATION !== "1")(
   },
   120_000,
 );
+
+it.skipIf(process.env.BLENDER_INTEGRATION !== "1")(
+  "lights a diffuse object from an HDR environment without punctual lights",
+  async () => {
+    const scene = new Scene();
+    scene.add(
+      new Mesh(
+        new SphereGeometry(1, 16, 12),
+        new MeshStandardMaterial({ color: 0xffffff, roughness: 1 }),
+      ),
+    );
+    const pixels = new Float32Array(16 * 8 * 4).fill(1);
+    scene.environment = new DataTexture(pixels, 16, 8, RGBAFormat, FloatType);
+    scene.background = scene.environment;
+    const camera = new PerspectiveCamera(45, 1, 0.1, 100);
+    camera.position.z = 5;
+    const options = {
+      scene,
+      camera,
+      width: 16,
+      height: 16,
+      samples: 32,
+      bounces: 4,
+      device: "cpu" as const,
+      adaptiveThreshold: 0,
+      toneMapping: "none" as const,
+      toneMappingExposure: 1,
+      outputColorSpace: "srgb" as const,
+    };
+    const lit = await renderScene(options);
+    const center = (8 * 16 + 8) * 4;
+    expect(lit.linear[center]).toBeGreaterThan(0.5);
+    expect(lit.linear[0]).toBeCloseTo(1, 2);
+    scene.environmentIntensity = 0.5;
+    scene.backgroundIntensity = 0.5;
+    const dim = await renderScene(options);
+    expect(lit.linear[center]! / dim.linear[center]!).toBeCloseTo(2, 1);
+    expect(dim.linear[0]).toBeCloseTo(0.5, 2);
+  },
+  120_000,
+);
