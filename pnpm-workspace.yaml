@@ -1,0 +1,3 @@
+overrides:
+  tinypool: ">=2.1.2"
+  source-map-js: ">=1.2.2"

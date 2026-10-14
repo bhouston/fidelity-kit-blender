@@ -6,6 +6,7 @@ import {
   Mesh,
   BoxGeometry,
   MeshStandardMaterial,
+  MeshBasicMaterial,
   DirectionalLight,
   SpotLight,
   PerspectiveCamera,
@@ -23,6 +24,18 @@ import {
   lightDescriptors,
   outputSettings,
 } from "./three.js";
+it("exports tone-mapped unlit materials and rejects explicit tone-mapping bypass", async () => {
+  const scene = new Scene();
+  const material = new MeshBasicMaterial({ color: 0xff0000 });
+  scene.add(new Mesh(new BoxGeometry(), material));
+  const glb = await exportScene(scene);
+  const jsonLength = new DataView(glb.buffer, glb.byteOffset).getUint32(12, true);
+  const json = JSON.parse(new TextDecoder().decode(glb.subarray(20, 20 + jsonLength)));
+  expect(json.materials[0].extensions.KHR_materials_unlit).toEqual({});
+  expect(json.materials[0].pbrMetallicRoughness.baseColorFactor).toEqual([1, 0, 0, 1]);
+  material.toneMapped = false;
+  await expect(exportScene(scene)).rejects.toThrow("bypasses Three.js tone mapping");
+});
 it("exports geometry and RGBA textures without changing scene structure or globals", async () => {
   const scene = new Scene();
   const texture = new DataTexture(new Uint8Array([255, 0, 0, 255]), 1, 1);

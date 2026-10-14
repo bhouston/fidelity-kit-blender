@@ -4,6 +4,8 @@ import {
   Mesh,
   SphereGeometry,
   MeshStandardMaterial,
+  MeshBasicMaterial,
+  BoxGeometry,
   DirectionalLight,
   PerspectiveCamera,
   DataTexture,
@@ -11,6 +13,32 @@ import {
   RGBAFormat,
 } from "three";
 import { renderScene, exportEnvironment } from "./three.js";
+it.skipIf(process.env.BLENDER_INTEGRATION !== "1")(
+  "renders an unlit material without lights and applies the requested tone mapping",
+  async () => {
+    const scene = new Scene();
+    scene.add(new Mesh(new BoxGeometry(), new MeshBasicMaterial({ color: 0xff0000 })));
+    const camera = new PerspectiveCamera(45, 1, 0.1, 100);
+    camera.position.set(0, 0, 3);
+    const result = await renderScene({
+      scene,
+      camera,
+      width: 16,
+      height: 16,
+      samples: 4,
+      bounces: 0,
+      device: "cpu",
+      adaptiveThreshold: 0,
+      toneMapping: "linear",
+      toneMappingExposure: 0.5,
+      outputColorSpace: "srgb",
+      background: { type: "transparent" },
+    });
+    const center = (8 * 16 + 8) * 4;
+    expect(Array.from(result.pixels.subarray(center, center + 4))).toEqual([188, 0, 0, 255]);
+  },
+  120_000,
+);
 it.skipIf(process.env.BLENDER_INTEGRATION !== "1")(
   "renders a real scene, transparency, light intensity and environment rotation",
   async () => {
