@@ -281,9 +281,9 @@ export function exportScene(
           diagnostic(
             `Unsupported material ${m.type}; supply a MeshStandardMaterial/MeshPhysicalMaterial or MeshBasicMaterial replacement`,
           );
-        if (!m.toneMapped || m.isMeshBasicMaterial)
+        if (!m.toneMapped)
           diagnostic(
-            `Material ${m.name || m.type} bypasses Three.js tone mapping/unlit lighting; Blender output applies a global tone mapper`,
+            `Material ${m.name || m.type} bypasses Three.js tone mapping; Blender output applies a global tone mapper`,
           );
         for (const [key, value] of Object.entries(material)) {
           const texture = value as Texture;
