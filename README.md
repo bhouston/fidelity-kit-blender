@@ -99,4 +99,10 @@ BLENDER_INTEGRATION=1 BLENDER_EXECUTABLE=/path/to/Blender pnpm test
 
 The Python worker uses a versioned JSON manifest, built-in glTF importer and Cycles. It writes scene-linear EXR; Three.js tone mapping runs in Node, avoiding Blender display-transform differences. Every render runs in an isolated Blender process and cleans its temporary directory. Prepared-scene caching and persistent workers are future extensions.
 
+### Point and line captures
+
+Set `features: { screenSpacePrimitives: true }` to capture untextured `PointsMaterial` and solid, one-pixel `LineBasicMaterial` primitives. The adapter exports camera-facing point squares and camera-projected line ribbons as unlit triangles. Point sizes follow Three.js pixel sizing and perspective attenuation at the requested physical viewport; lines are clipped to the camera frustum and retain interpolated vertex colors. Parent transforms, opacity and tone-mapping settings are preserved, and the original scene is unchanged.
+
+This translation is specific to the capture camera and resolution. It represents the raster primitives for a still comparison, rather than introducing a camera-independent world-space point radius or line thickness. Textured sprites, dashed lines and non-unit line widths still require explicit supported triangle geometry. With the feature omitted, the existing strict unsupported-material diagnostics remain in effect.
+
 Color operators are adapted from the MIT-licensed Three.js shader implementations (copyright Three.js authors). GLTFExporter, EXRExporter and EXRLoader are used from the caller's Three.js peer dependency.

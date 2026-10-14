@@ -38,6 +38,8 @@ import { GLTFExporter } from "three/addons/exporters/GLTFExporter.js";
 import { EXRExporter, NO_COMPRESSION } from "three/addons/exporters/EXRExporter.js";
 import { clone } from "three/addons/utils/SkeletonUtils.js";
 import { renderGLTF } from "./index.js";
+import { bakeScreenPrimitives } from "./screen-primitives.js";
+import type { ScreenPrimitiveContext } from "./screen-primitives.js";
 import type {
   Background,
   Camera,
@@ -57,7 +59,12 @@ export interface SceneRenderOptions extends Omit<RenderOptions, "background"> {
   unsupported?: "error" | "warn";
   onDiagnostic?: (message: string) => void;
   /** Optional scene translations; omitted/false retains strict unsupported-feature diagnostics. */
-  features?: { areaLights?: boolean; depthOfField?: boolean; textureBackground?: boolean };
+  features?: {
+    areaLights?: boolean;
+    depthOfField?: boolean;
+    textureBackground?: boolean;
+    screenSpacePrimitives?: boolean;
+  };
 }
 export function cameraDescriptor(camera: ThreeCamera, depthOfField = false): Camera {
   const aperture = (camera as ThreeCamera & { bokehSize?: number }).bokehSize;
@@ -248,9 +255,11 @@ export function exportScene(
   diagnostic: (message: string) => void = (message) => {
     throw new Error(message);
   },
+  screenPrimitives?: ScreenPrimitiveContext,
 ): Promise<Uint8Array> {
   const task = exportQueue.then(async () => {
     const snapshot = clone(scene);
+    if (screenPrimitives) bakeScreenPrimitives(snapshot, screenPrimitives);
     const materialCopies = new Map<Material, Material>();
     const textureCopies = new Map<Texture, Texture>();
     const copyMaterial = (material: Material): Material => {
@@ -415,7 +424,13 @@ export async function renderScene(options: SceneRenderOptions) {
         "Specify background explicitly for a separate/blurred/rotated background texture",
       );
   }
-  const gltf = await exportScene(scene, diagnostic);
+  const gltf = await exportScene(
+    scene,
+    diagnostic,
+    options.features?.screenSpacePrimitives
+      ? { camera, width: options.width, height: options.height }
+      : undefined,
+  );
   return renderGLTF({
     ...options,
     gltf,
